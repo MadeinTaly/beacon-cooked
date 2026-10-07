@@ -1,9 +1,30 @@
 {
-  "title": "Tuya Beacon",
+  "title": "Beacon Cooked — Tuya Beacon",
   "config": {
-    "step": {"user": {"title": "Collega il gateway Bluetooth", "description": "Inserisci indirizzo e token del gateway Tuya Beacon. Il Bluetooth può trovarsi su un altro computer.", "data": {"gateway_url": "URL del gateway", "token": "Token del gateway"}}},
-    "error": {"cannot_connect": "Impossibile raggiungere il gateway", "invalid_auth": "Token del gateway non valido", "invalid_gateway": "URL del gateway o risposta non validi"},
-    "abort": {"already_configured": "Gateway già configurato"}
+    "step": {
+      "user": {
+        "title": "Collega il gateway Bluetooth",
+        "description": "Inserisci indirizzo e token del gateway Tuya Beacon. Il Bluetooth può trovarsi su un altro computer.",
+        "data": {
+          "gateway_url": "URL del gateway",
+          "token": "Token del gateway"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossibile raggiungere il gateway",
+      "invalid_auth": "Token del gateway non valido",
+      "invalid_gateway": "URL del gateway o risposta non validi"
+    },
+    "abort": {
+      "already_configured": "Gateway già configurato"
+    }
   },
-  "entity": {"button": {"pair_remote": {"name": "Associa telecomando virtuale"}}}
+  "entity": {
+    "button": {
+      "pair_remote": {
+        "name": "Associa telecomando virtuale"
+      }
+    }
+  }
 }

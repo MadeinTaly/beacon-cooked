@@ -1,5 +1,5 @@
 [Unit]
-Description=Tuya Beacon local Bluetooth gateway
+Description=Beacon Cooked Bluetooth gateway
 After=bluetooth.service network-online.target
 Wants=bluetooth.service network-online.target
 
@@ -13,7 +13,7 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/var/lib/tuya-beacon
+ReadWritePaths=/var/lib/tuya-beacon /etc/tuya-beacon
 CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
 
 [Install]

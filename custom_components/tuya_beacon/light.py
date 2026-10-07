@@ -23,11 +23,14 @@ class BeaconLight(CoordinatorEntity, LightEntity):
     def __init__(self, coordinator, lamp):
         super().__init__(coordinator)
         self.light_id = lamp['id']
+        self.device_mac = lamp.get('mac')
+        self.profile = lamp.get('profile', 'unverified_beacon')
+        self.capabilities_verified = lamp.get('capabilities_verified', [])
         unique = f"{coordinator.data['gateway_id']}_{self.light_id}"
         self._attr_unique_id = unique
         self._attr_effect_list = list(coordinator.data['colors'])
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, unique)}, name=lamp['name'],
-                                           manufacturer='Tuya compatible', model='Beacon virtual remote group')
+                                           manufacturer='Tuya compatible', model=lamp.get('model', 'Beacon virtual remote group'))
 
     @property
     def state_data(self):
@@ -43,7 +46,10 @@ class BeaconLight(CoordinatorEntity, LightEntity):
 
     @property
     def extra_state_attributes(self):
-        return {'state_source': 'last_command', 'device_acknowledged': False}
+        return {'state_source': 'last_command', 'device_acknowledged': False,
+                'device_mac': self.device_mac, 'device_profile': self.profile,
+                'protocol': 'tuya_beacon_xxtea_v1',
+                'capabilities_verified': self.capabilities_verified}
 
     async def _send(self, body):
         try:

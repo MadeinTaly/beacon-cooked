@@ -23,7 +23,7 @@ class BeaconConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                        user_input[CONF_GATEWAY_URL], user_input[CONF_TOKEN]).info()
                 await self.async_set_unique_id(info['gateway_id'])
                 self._abort_if_unique_id_configured()
-                return self.async_create_entry(title='Tuya Beacon', data=user_input)
+                return self.async_create_entry(title='Beacon Cooked', data=user_input)
             except ClientResponseError as error:
                 errors['base'] = 'invalid_auth' if error.status == 401 else 'cannot_connect'
             except (ClientError, TimeoutError):

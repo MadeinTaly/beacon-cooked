@@ -5,14 +5,16 @@ import json
 import logging
 import math
 import re
+import secrets
 import subprocess
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from codec import PAIR_KEY, encode, xxtea
+from discovery import scan
 
-LOG = logging.getLogger('tuya_beacon')
+LOG = logging.getLogger('beacon_cooked')
 TARGET = bytes.fromhex('eeeeeeeeee00')
 COLORS = {'Red': 0, 'Orange': 30, 'Yellow': 60, 'Green': 120,
           'Cyan': 180, 'Blue': 240, 'Purple': 270, 'Magenta': 300}
@@ -72,26 +74,90 @@ class Radio:
 
 
 class Gateway:
-    def __init__(self, config, state_path, radio=None):
+    def __init__(self, config, state_path, radio=None, config_path=None):
         self.config = config
+        self.config_path = Path(config_path) if config_path else None
+        self.discovered = []
+        self.discovered_at = 0
         self.state_path = Path(state_path)
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         self.saved = json.loads(self.state_path.read_text()) if self.state_path.exists() else {}
         self.radio = radio or Radio(config.get('adapter', 'hci0'))
         self.lock = threading.Lock()
+        senders = set()
+        identities = set()
         for lamp in config['lights']:
             sender = bytes.fromhex(lamp['sender'].replace(':', ''))
             salt = bytes.fromhex(lamp['salt'])
             if len(sender) != 6 or sender[0] & 0xc0 != 0xc0 or len(salt) != 2:
                 raise ValueError('Sender must be a static random MAC; salt must be 2 bytes')
+            if sender in senders or lamp['id'] in identities:
+                raise ValueError('Each virtual remote must have a unique sender and ID')
+            senders.add(sender)
+            identities.add(lamp['id'])
 
     def info(self):
         with self.lock:
             return {'api_version': 1, 'gateway_id': self.config['gateway_id'],
                     'state_source': 'last_command', 'colors': COLORS,
+                    'name': 'Beacon Cooked', 'discovered': self.discovered,
                     'lights': [dict(id=x['id'], name=x['name'],
+                                    mac=x.get('mac'), association=x.get('association', 'previously_configured'),
+                                    model=x.get('model', 'Beacon virtual remote group'),
+                                    profile=x.get('profile', 'unverified_beacon'),
+                                    protocol='tuya_beacon_xxtea_v1',
+                                    capabilities_verified=x.get('capabilities_verified', []),
                                     state=self.saved.get(x['id'], {}).get('state', {}))
                                for x in self.config['lights']]}
+
+    def save_config(self):
+        if self.config_path:
+            atomic_json(self.config_path, self.config)
+
+    def discover(self, seconds=8):
+        if type(seconds) not in (int, float) or not math.isfinite(seconds) or not 1 <= seconds <= 15:
+            raise ValueError('Scan duration must be 1–15 seconds')
+        with self.lock:
+            self.discovered = scan(self.radio, seconds)
+            self.discovered_at = time.monotonic()
+            return {'devices': self.discovered}
+
+    def enroll(self, body):
+        mac, name = body.get('mac', ''), body.get('name', '')
+        if not isinstance(mac, str) or not isinstance(name, str):
+            raise ValueError('Device MAC and name must be strings')
+        mac, name = mac.upper(), name.strip()
+        if not re.fullmatch(r'(?:[0-9A-F]{2}:){5}[0-9A-F]{2}', mac) or not 1 <= len(name) <= 80:
+            raise ValueError('Select a discovered device and enter its name')
+        with self.lock:
+            if time.monotonic() - self.discovered_at > 300 or not any(x['mac'] == mac for x in self.discovered):
+                raise ValueError('Device scan expired; scan again')
+            lamp = next((x for x in self.config['lights'] if x.get('mac') == mac), None)
+            if lamp is None:
+                while True:
+                    sender = bytes([0xc2]) + secrets.token_bytes(5)
+                    if all(sender.hex(':') != x['sender'].lower() for x in self.config['lights']):
+                        break
+                lamp = {'id': mac.replace(':', '').lower(), 'mac': mac, 'name': name,
+                        'sender': sender.hex(':'), 'salt': secrets.token_hex(2),
+                        'profile': 'unverified_beacon', 'capabilities_verified': [],
+                        'association': 'unverified'}
+                self.config['lights'].append(lamp)
+            else:
+                lamp['name'] = name
+            self.save_config()
+            return {'id': lamp['id'], 'name': lamp['name'], 'association': lamp.get('association', 'unverified')}
+
+    def confirm(self, light_id, body):
+        if type(body.get('confirmed')) is not bool:
+            raise ValueError('confirmed must be boolean')
+        with self.lock:
+            lamp = next((x for x in self.config['lights'] if x['id'] == light_id), None)
+            if lamp is None:
+                raise KeyError('Unknown light')
+            lamp['association'] = 'user_confirmed' if body['confirmed'] else 'unverified'
+            self.save_config()
+            return {'association': lamp['association']}
 
     def execute(self, light_id, body, pair=False):
         lamp = next((x for x in self.config['lights'] if x['id'] == light_id), None)
@@ -140,6 +206,8 @@ class Gateway:
             if not pair:
                 saved.setdefault('state', {}).update(body)
                 atomic_json(self.state_path, self.saved)
+                if getattr(self, 'mqtt', None):
+                    self.mqtt.publish_state(lamp)
             LOG.info('Transmitted %s for %s (%d frames)', 'pair' if pair else 'command', light_id, len(packets))
             return {'transmitted': True, 'device_acknowledged': False,
                     'state': saved.get('state', {})}
@@ -175,8 +243,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self.authorized():
             return
-        match = re.fullmatch(r'/v1/lights/([a-zA-Z0-9_-]+)/(command|pair)', self.path)
-        if not match:
+        match = re.fullmatch(r'/v1/lights/([a-zA-Z0-9_-]+)/(command|pair|confirm)', self.path)
+        if not match and self.path not in ('/v1/discover', '/v1/enroll'):
             self.respond(404, {'error': 'Not found'})
             return
         try:
@@ -187,7 +255,16 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(length))
             if not isinstance(body, dict):
                 raise ValueError('Expected JSON object')
-            self.respond(200, self.server.gateway.execute(match[1], body, match[2] == 'pair'))
+            gateway = self.server.gateway
+            if self.path == '/v1/discover':
+                result = gateway.discover(body.get('seconds', 8))
+            elif self.path == '/v1/enroll':
+                result = gateway.enroll(body)
+            elif match[2] == 'confirm':
+                result = gateway.confirm(match[1], body)
+            else:
+                result = gateway.execute(match[1], body, match[2] == 'pair')
+            self.respond(200, result)
         except KeyError:
             self.respond(404, {'error': 'Unknown light'})
         except (ValueError, TypeError) as error:
@@ -204,7 +281,11 @@ def main():
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
     config = json.loads(Path(args.config).read_text())
-    gateway = Gateway(config, args.state)
+    gateway = Gateway(config, args.state, config_path=args.config)
+    if config.get('mqtt', {}).get('enabled'):
+        from mqtt_bridge import MQTTBridge
+        gateway.mqtt = MQTTBridge(gateway, config['mqtt'])
+        gateway.mqtt.start()
     server = ThreadingHTTPServer((config.get('bind', '127.0.0.1'), config.get('port', 8787)), Handler)
     server.gateway = gateway
     server.serve_forever()

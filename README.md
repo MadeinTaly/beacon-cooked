@@ -1,4 +1,16 @@
-# Tuya Beacon for Home Assistant
+# Beacon Cooked
+
+### Local Tuya Beacon control · Home Assistant · MQTT
+
+![Beacon Cooked](docs/beacon-cooked.svg)
+
+**Your Bluetooth lights, cooked locally.** An unofficial open-source gateway and
+HACS integration for Tuya Beacon lights. Put Bluetooth on a Linux host, and control
+the lights from Home Assistant on another machine.
+
+[Install through HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=MadeinTaly&repository=beacon-cooked&category=integration)
+· [First verified WRGB spotlight](docs/devices/wrgb-spotlight.md)
+· [Report another device](https://github.com/MadeinTaly/beacon-cooked/issues/new)
 
 Unofficial local control of Tuya Beacon lights through a network Bluetooth gateway.
 Home Assistant and the Bluetooth USB adapter can run on different machines. No Tuya
@@ -6,7 +18,7 @@ cloud account or cloud API is used for commands.
 
 ## Status and supported hardware
 
-Experimental version 0.1.0. Red and blue were physically confirmed on one AliExpress
+Experimental version 0.2.0. Red and blue were physically confirmed on one AliExpress
 WRGB spotlight using a virtual remote reconstructed from Tuya's public AK80x SDK.
 The actual spotlight chipset and commercial model are not identified. This is **not**
 support for every product advertised as Tuya Bluetooth or Tuya BLE Mesh.
@@ -98,9 +110,55 @@ All routes require `Authorization: Bearer TOKEN`.
 - `GET /v1/info`: gateway identity, configured groups, colors, last command states.
 - `POST /v1/lights/ID/command`: `{"on": true, "effect": "Purple"}` or `{"on": false}`.
 - `POST /v1/lights/ID/pair`: `{"seconds": 15}`; sends only binding packets.
+- `POST /v1/discover`: `{"seconds": 8}`; detects the observed Beacon advertisement
+  format and returns MAC, RSSI and pairing indication. Generic Tuya BLE is not matched.
+- `POST /v1/enroll`: `{"mac": "MAC_FROM_SCAN", "name": "My light"}`; creates a new
+  virtual remote identity for a recently discovered device. This does **not** prove binding.
+- `POST /v1/lights/ID/confirm`: `{"confirmed": true}`; records the user's physical
+  confirmation. It is not a device acknowledgement.
 
 Replies explicitly distinguish `transmitted` from `device_acknowledged` (always false).
 Radio commands are serialized across groups and request bodies are bounded.
+
+## MQTT (optional)
+
+Install `python3-paho-mqtt` on the gateway and add this section to its configuration:
+
+```json
+"mqtt": {
+  "enabled": true,
+  "host": "YOUR_BROKER_HOST",
+  "port": 1883,
+  "prefix": "beacon_cooked",
+  "discovery": false
+}
+```
+
+Optional keys: `username`, `password`, `tls`. Restart the gateway after changing it.
+Publish `{"state":"ON","effect":"Purple"}` to `beacon_cooked/spotlight/set`.
+Last commanded state is retained at `beacon_cooked/spotlight/state`; gateway connection
+status is retained at `beacon_cooked/availability` with a last will of `offline`.
+
+Set `discovery: true` to use MQTT auto-discovery **instead of** the native HACS light.
+Using both creates two entities controlling the same remote group. MQTT commands and
+native HA commands share the radio lock and sequence counters.
+
+## Discovery and onboarding status
+
+The gateway exposes scan and enrollment APIs. The current HACS UI connects a gateway
+and exposes its configured lights. A full graphical scan → select → bind → physically
+verify wizard is a next step; it is not shipped in this release.
+
+Initial factory pairing without the Tuya app has not been demonstrated. The examined
+SDK accepts remote binding only in a particular device state; do not assume the remote
+binding button replaces every manufacturer's initial provisioning procedure.
+
+## Roadmap
+
+- Guided discovery and binding from Home Assistant, with a physical color check.
+- Identify and document more spotlight models; verify independent multi-lamp control.
+- Verify brightness and white controls before exposing them in HA.
+- Additional gateway platforms, including an ESP32 transmitter.
 
 ## Development
 

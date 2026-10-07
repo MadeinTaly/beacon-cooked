@@ -25,6 +25,8 @@ class BeaconCoordinator(DataUpdateCoordinator):
 
 
 async def async_setup_entry(hass, entry):
+    if entry.title == 'Tuya Beacon':
+        hass.config_entries.async_update_entry(entry, title='Beacon Cooked')
     coordinator = BeaconCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
