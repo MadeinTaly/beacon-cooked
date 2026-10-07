@@ -1,0 +1,20 @@
+[Unit]
+Description=Tuya Beacon local Bluetooth gateway
+After=bluetooth.service network-online.target
+Wants=bluetooth.service network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/tuya-beacon/server.py
+Restart=on-failure
+RestartSec=3
+StateDirectory=tuya-beacon
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/tuya-beacon
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
+
+[Install]
+WantedBy=multi-user.target

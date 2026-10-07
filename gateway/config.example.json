@@ -1,0 +1,8 @@
+{
+  "gateway_id": "my-beacon-gateway",
+  "adapter": "hci0",
+  "bind": "127.0.0.1",
+  "port": 8787,
+  "token": "REPLACE_WITH_A_RANDOM_TOKEN",
+  "lights": [{"id": "spotlight", "name": "Spotlight", "sender": "c2:00:00:00:00:01", "salt": "6172"}]
+}
