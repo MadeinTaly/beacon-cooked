@@ -20,7 +20,10 @@ class FakeAPI:
     async def confirm(self, light_id, confirmed, effect=None):
         self.calls.append(('confirm', light_id, confirmed, effect))
     async def discover(self):
-        return {'devices': []}
+        return {'devices': getattr(self, 'devices', [])}
+    async def enroll(self, mac, name):
+        self.calls.append(('enroll', mac, name))
+        return {'id': mac.replace(':', '').lower(), 'name': name, 'association': 'unverified'}
 
 
 class FakeWizard(DeviceWizard):
@@ -61,4 +64,27 @@ class WizardTests(unittest.IsolatedAsyncioTestCase):
         flow = FakeWizard()
         result = await flow.async_step_scan({})
         self.assertEqual(result['errors']['base'], 'no_devices')
+        self.assertEqual(flow._api.calls, [])
+
+    async def test_discovered_light_completes_software_onboarding(self):
+        flow = FakeWizard()
+        mac = 'DC:23:50:00:00:01'
+        flow._api.devices = [{'mac': mac, 'rssi': -50}]
+        result = await flow.async_step_scan({})
+        self.assertEqual(result['step_id'], 'select_device')
+        result = await flow.async_step_select_device({'device': mac, 'name': 'Kitchen'})
+        self.assertEqual(result['step_id'], 'bind')
+        result = await flow.async_step_bind({'only_target': True})
+        self.assertEqual(result['step_id'], 'test')
+        self.assertEqual(flow._api.calls[-1], ('command', 'dc2350000001', {'seconds': 15}, True))
+        result = await flow.async_step_test({'effect': 'Blue'})
+        self.assertEqual(result['step_id'], 'verify')
+        result = await flow.async_step_verify({'result': 'confirmed'})
+        self.assertEqual(result['step_id'], 'added')
+        self.assertEqual(flow._api.calls[-1], ('confirm', 'dc2350000001', True, 'Blue'))
+
+    async def test_cancel_does_not_confirm_unobserved_output(self):
+        flow = FakeWizard()
+        result = await flow.async_step_verify({'result': 'cancel'})
+        self.assertEqual(result['step_id'], 'menu')
         self.assertEqual(flow._api.calls, [])

@@ -2,7 +2,7 @@
 
 ### Local Tuya Beacon control · Home Assistant · MQTT
 
-![Beacon Cooked](docs/beacon-cooked.svg)
+![Beacon Cooked](docs/beacon-cooked-banner.png)
 
 **Your Bluetooth lights, cooked locally.** An unofficial open-source gateway and
 HACS integration for Tuya Beacon lights. Control lights using a local USB Bluetooth
@@ -18,7 +18,9 @@ cloud account or cloud API is used for commands.
 
 ## Status and supported hardware
 
-Experimental version 0.3.0. Red and blue were physically confirmed on one AliExpress
+Stable release 0.3.1 for local control of the verified, already associated WRGB
+spotlight. New-device onboarding and additional hardware remain experimental.
+Red and blue were physically confirmed on one AliExpress
 WRGB spotlight using a virtual remote reconstructed from Tuya's public AK80x SDK.
 The actual spotlight chipset and commercial model are not identified. This is **not**
 support for every product advertised as Tuya Bluetooth or Tuya BLE Mesh.
@@ -188,7 +190,11 @@ failed/unverified association, with a retry path.
 
 `python3 -m unittest discover -s tests -v` checks packet encoding, persisted counters,
 invalid requests and radio failure behavior. `python3 -m compileall -q custom_components gateway`
-checks Python syntax. Physical compatibility requires a real lamp test.
+checks Python syntax. Six wizard tests run in a Home Assistant Python environment.
+`scripts/e2e.py` exercises an installed HA integration, the remote Bluetooth service
+and optionally MQTT; it changes colors and restores the original commanded state.
+See [validation results and remaining limits](docs/validation.md). Physical compatibility
+requires a real lamp test.
 
 ## Attribution
 

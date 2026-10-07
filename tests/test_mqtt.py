@@ -24,3 +24,19 @@ class MQTTTests(unittest.TestCase):
         for body in ({'state': 'invalid'}, {'brightness': 100}, ['ON']):
             self.bridge.on_message(None, None, self.message(body))
         self.assertTrue(self.bridge.commands.empty())
+
+    def test_new_confirmed_light_is_discoverable_without_restart(self):
+        published = []
+        self.bridge.prefix = 'beacon_cooked'
+        self.bridge.config = {'discovery': True}
+        self.bridge.gateway = SimpleNamespace(config={'gateway_id': 'host'}, saved={})
+        self.bridge.client = SimpleNamespace(publish=lambda *args, **kwargs: published.append(args))
+        lamp = {'id': 'lamp', 'name': 'New light', 'association': 'unverified'}
+        self.bridge.register_light(lamp)
+        self.assertEqual(published, [])
+        lamp['association'] = 'user_confirmed'
+        self.bridge.register_light(lamp)
+        self.assertEqual(published[-1][0], 'homeassistant/light/beacon_cooked/host_lamp/config')
+        discovery = json.loads(published[-1][1])
+        self.assertEqual(discovery['command_topic'], 'beacon_cooked/lamp/set')
+        self.assertIn('Blue', discovery['effect_list'])

@@ -1,13 +1,18 @@
 {
   "domain": "tuya_beacon",
-  "name": "Beacon Cooked — Tuya Beacon",
-  "after_dependencies": ["bluetooth", "mqtt"],
-  "codeowners": ["@MadeinTaly"],
+  "name": "Beacon Cooked \u2014 Tuya Beacon",
+  "after_dependencies": [
+    "bluetooth",
+    "mqtt"
+  ],
+  "codeowners": [
+    "@MadeinTaly"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/MadeinTaly/beacon-cooked",
   "integration_type": "hub",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/MadeinTaly/beacon-cooked/issues",
   "requirements": [],
-  "version": "0.3.0"
+  "version": "0.3.1"
 }
