@@ -44,20 +44,25 @@ class MQTTBridge:
         client.subscribe(self.prefix + '/+/set')
         client.publish(self.prefix + '/availability', 'online', retain=True)
         for lamp in self.gateway.config['lights']:
-            self.publish_state(lamp)
-            if self.config.get('discovery', False):
-                from server import COLORS
-                unique = self.gateway.config['gateway_id'] + '_' + lamp['id']
-                data = {'name': lamp['name'], 'unique_id': 'beacon_cooked_' + unique,
-                        'schema': 'json', 'command_topic': f"{self.prefix}/{lamp['id']}/set",
-                        'state_topic': f"{self.prefix}/{lamp['id']}/state",
-                        'availability_topic': self.prefix + '/availability',
-                        'effect': True, 'effect_list': list(COLORS),
-                        'supported_color_modes': ['onoff'],
-                        'device': {'identifiers': ['beacon_cooked_' + unique],
-                                   'name': lamp['name'], 'model': 'Tuya Beacon virtual remote group',
-                                   'manufacturer': 'Tuya compatible'}}
-                client.publish(f"homeassistant/light/beacon_cooked/{unique}/config", json.dumps(data), retain=True)
+            self.register_light(lamp)
+
+    def register_light(self, lamp):
+        if lamp.get('association') == 'unverified':
+            return
+        self.publish_state(lamp)
+        if self.config.get('discovery', False):
+            from server import COLORS
+            unique = self.gateway.config['gateway_id'] + '_' + lamp['id']
+            data = {'name': lamp['name'], 'unique_id': 'beacon_cooked_' + unique,
+                    'schema': 'json', 'command_topic': f"{self.prefix}/{lamp['id']}/set",
+                    'state_topic': f"{self.prefix}/{lamp['id']}/state",
+                    'availability_topic': self.prefix + '/availability',
+                    'effect': True, 'effect_list': list(COLORS),
+                    'supported_color_modes': ['onoff'],
+                    'device': {'identifiers': ['beacon_cooked_' + unique],
+                               'name': lamp['name'], 'model': 'Tuya Beacon virtual remote group',
+                               'manufacturer': 'Tuya compatible'}}
+            self.client.publish(f"homeassistant/light/beacon_cooked/{unique}/config", json.dumps(data), retain=True)
 
     def on_message(self, client, userdata, message):
         if len(message.payload) > 1024:

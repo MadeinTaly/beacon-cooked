@@ -1,216 +1,18 @@
-"""Local Tuya Beacon gateway. State is the last command, never device feedback."""
+"""Optional HTTP/MQTT service for a remote Linux Bluetooth host."""
 import argparse
 import hmac
 import json
 import logging
-import math
 import re
-import secrets
-import subprocess
-import threading
-import time
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import sys
 from pathlib import Path
-from codec import PAIR_KEY, encode, xxtea
-from discovery import scan
-
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+# Source checkout: share exactly the library shipped by HACS.
+source = Path(__file__).resolve().parents[1] / 'custom_components' / 'tuya_beacon'
+if source.is_dir():
+    sys.path.insert(0, str(source))
+from beacon.controller import Gateway, Radio, COLORS
 LOG = logging.getLogger('beacon_cooked')
-TARGET = bytes.fromhex('eeeeeeeeee00')
-COLORS = {'Red': 0, 'Orange': 30, 'Yellow': 60, 'Green': 120,
-          'Cyan': 180, 'Blue': 240, 'Purple': 270, 'Magenta': 300}
-
-
-def atomic_json(path, value):
-    temporary = path.with_suffix('.tmp')
-    with temporary.open('w') as file:
-        json.dump(value, file)
-        file.flush()
-        import os
-        os.fsync(file.fileno())
-    temporary.replace(path)
-
-
-class Radio:
-    def __init__(self, adapter):
-        if not re.fullmatch(r'hci\d+', adapter):
-            raise ValueError('Invalid adapter')
-        self.adapter = adapter
-
-    def command(self, ocf, payload=b'', allow_disabled=False):
-        result = subprocess.run(
-            ['/usr/bin/hcitool', '-i', self.adapter, 'cmd', '0x08', hex(ocf)]
-            + [hex(byte) for byte in payload], capture_output=True, text=True, timeout=5)
-        if result.returncode:
-            raise RuntimeError('Bluetooth command failed: ' + result.stderr.strip())
-        try:
-            tail = result.stdout.split('> HCI Event:')[-1].splitlines()[1:]
-            reply = bytes.fromhex(' '.join(tail))
-            if len(reply) < 4 or reply[1:3] != (0x2000 | ocf).to_bytes(2, 'little'):
-                raise ValueError('Unexpected opcode')
-            status = reply[3]
-        except ValueError as error:
-            raise RuntimeError('Invalid HCI response') from error
-        if status and not (allow_disabled and status == 0x0c):
-            raise RuntimeError(f'Bluetooth command {ocf:#x}: status {status:#x}')
-
-    def stop(self):
-        self.command(0x0a, b'\0', allow_disabled=True)
-
-    def prepare(self, sender):
-        self.stop()
-        self.command(0x05, sender[::-1])
-        self.command(0x06, bytes.fromhex('200020000001000000000000000700'))
-        self.command(0x09, b'\0' * 32)  # Empty scan response.
-
-    def send(self, raw):
-        if len(raw) != 31:
-            raise ValueError('Invalid advertising frame')
-        self.command(0x08, bytes([31]) + raw)
-        self.command(0x0a, b'\x01')
-        try:
-            time.sleep(0.7)
-        finally:
-            self.stop()
-
-
-class Gateway:
-    def __init__(self, config, state_path, radio=None, config_path=None):
-        self.config = config
-        self.config_path = Path(config_path) if config_path else None
-        self.discovered = []
-        self.discovered_at = 0
-        self.state_path = Path(state_path)
-        self.state_path.parent.mkdir(parents=True, exist_ok=True)
-        self.saved = json.loads(self.state_path.read_text()) if self.state_path.exists() else {}
-        self.radio = radio or Radio(config.get('adapter', 'hci0'))
-        self.lock = threading.Lock()
-        senders = set()
-        identities = set()
-        for lamp in config['lights']:
-            sender = bytes.fromhex(lamp['sender'].replace(':', ''))
-            salt = bytes.fromhex(lamp['salt'])
-            if len(sender) != 6 or sender[0] & 0xc0 != 0xc0 or len(salt) != 2:
-                raise ValueError('Sender must be a static random MAC; salt must be 2 bytes')
-            if sender in senders or lamp['id'] in identities:
-                raise ValueError('Each virtual remote must have a unique sender and ID')
-            senders.add(sender)
-            identities.add(lamp['id'])
-
-    def info(self):
-        with self.lock:
-            return {'api_version': 1, 'gateway_id': self.config['gateway_id'],
-                    'state_source': 'last_command', 'colors': COLORS,
-                    'name': 'Beacon Cooked', 'discovered': self.discovered,
-                    'lights': [dict(id=x['id'], name=x['name'],
-                                    mac=x.get('mac'), association=x.get('association', 'previously_configured'),
-                                    model=x.get('model', 'Beacon virtual remote group'),
-                                    profile=x.get('profile', 'unverified_beacon'),
-                                    protocol='tuya_beacon_xxtea_v1',
-                                    capabilities_verified=x.get('capabilities_verified', []),
-                                    state=self.saved.get(x['id'], {}).get('state', {}))
-                               for x in self.config['lights']]}
-
-    def save_config(self):
-        if self.config_path:
-            atomic_json(self.config_path, self.config)
-
-    def discover(self, seconds=8):
-        if type(seconds) not in (int, float) or not math.isfinite(seconds) or not 1 <= seconds <= 15:
-            raise ValueError('Scan duration must be 1–15 seconds')
-        with self.lock:
-            self.discovered = scan(self.radio, seconds)
-            self.discovered_at = time.monotonic()
-            return {'devices': self.discovered}
-
-    def enroll(self, body):
-        mac, name = body.get('mac', ''), body.get('name', '')
-        if not isinstance(mac, str) or not isinstance(name, str):
-            raise ValueError('Device MAC and name must be strings')
-        mac, name = mac.upper(), name.strip()
-        if not re.fullmatch(r'(?:[0-9A-F]{2}:){5}[0-9A-F]{2}', mac) or not 1 <= len(name) <= 80:
-            raise ValueError('Select a discovered device and enter its name')
-        with self.lock:
-            if time.monotonic() - self.discovered_at > 300 or not any(x['mac'] == mac for x in self.discovered):
-                raise ValueError('Device scan expired; scan again')
-            lamp = next((x for x in self.config['lights'] if x.get('mac') == mac), None)
-            if lamp is None:
-                while True:
-                    sender = bytes([0xc2]) + secrets.token_bytes(5)
-                    if all(sender.hex(':') != x['sender'].lower() for x in self.config['lights']):
-                        break
-                lamp = {'id': mac.replace(':', '').lower(), 'mac': mac, 'name': name,
-                        'sender': sender.hex(':'), 'salt': secrets.token_hex(2),
-                        'profile': 'unverified_beacon', 'capabilities_verified': [],
-                        'association': 'unverified'}
-                self.config['lights'].append(lamp)
-            else:
-                lamp['name'] = name
-            self.save_config()
-            return {'id': lamp['id'], 'name': lamp['name'], 'association': lamp.get('association', 'unverified')}
-
-    def confirm(self, light_id, body):
-        if type(body.get('confirmed')) is not bool:
-            raise ValueError('confirmed must be boolean')
-        with self.lock:
-            lamp = next((x for x in self.config['lights'] if x['id'] == light_id), None)
-            if lamp is None:
-                raise KeyError('Unknown light')
-            lamp['association'] = 'user_confirmed' if body['confirmed'] else 'unverified'
-            self.save_config()
-            return {'association': lamp['association']}
-
-    def execute(self, light_id, body, pair=False):
-        lamp = next((x for x in self.config['lights'] if x['id'] == light_id), None)
-        if lamp is None:
-            raise KeyError('Unknown light')
-        if pair:
-            seconds = body.get('seconds', 15)
-            if type(seconds) not in (int, float) or not math.isfinite(seconds) or not 1 <= seconds <= 30:
-                raise ValueError('Pairing duration must be 1–30 seconds')
-        else:
-            if not body or set(body) - {'on', 'effect'}:
-                raise ValueError('Expected on and/or effect')
-            if 'on' in body and type(body['on']) is not bool:
-                raise ValueError('on must be boolean')
-            if 'effect' in body and body['effect'] not in COLORS:
-                raise ValueError('Unknown color')
-        with self.lock:
-            saved = self.saved.setdefault(light_id, {})
-            sequence = max(saved.get('counter', 20000), 20000)
-            count = math.ceil(seconds / 0.7) if pair else 3
-            if sequence + count >= 1 << 24:
-                raise RuntimeError('Sequence counter exhausted')
-            saved['counter'] = sequence + count
-            atomic_json(self.state_path, self.saved)  # Reserve before transmitting.
-            sender = bytes.fromhex(lamp['sender'].replace(':', ''))
-            salt = bytes.fromhex(lamp['salt'])
-            key = xxtea(salt + sender[2:6] + b'TuyaIoT-OS', PAIR_KEY)
-            packets = []
-            if pair:
-                for offset in range(count):
-                    packets.append(encode(TARGET, 8, sequence + offset,
-                                          b'\x03\x00\x01' + salt + b'\0' * 4, PAIR_KEY))
-            else:
-                if 'on' in body:
-                    packets.append(encode(TARGET, 7, sequence, b'\x01\x01\x01' + bytes([body['on']]), key))
-                if 'effect' in body:
-                    packets.append(encode(TARGET, 7, sequence + 1, bytes.fromhex('02040101'), key))
-                    params = bytes.fromhex('0b0004') + COLORS[body['effect']].to_bytes(2, 'big') + b'\x64\x64'
-                    packets.append(encode(TARGET, 7, sequence + 2, params, key))
-            try:
-                self.radio.prepare(sender)
-                for packet in packets:
-                    self.radio.send(packet)
-            finally:
-                self.radio.stop()
-            if not pair:
-                saved.setdefault('state', {}).update(body)
-                atomic_json(self.state_path, self.saved)
-                if getattr(self, 'mqtt', None):
-                    self.mqtt.publish_state(lamp)
-            LOG.info('Transmitted %s for %s (%d frames)', 'pair' if pair else 'command', light_id, len(packets))
-            return {'transmitted': True, 'device_acknowledged': False,
-                    'state': saved.get('state', {})}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -278,9 +80,18 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', default='/etc/tuya-beacon/config.json')
     parser.add_argument('--state', default='/var/lib/tuya-beacon/state.json')
+    parser.add_argument('--stop-radio', action='store_true')
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
     config = json.loads(Path(args.config).read_text())
+    if args.stop_radio:
+        radio = Radio(config.get('adapter', 'hci0'))
+        radio.stop()
+        if radio.extended:
+            radio.command(0x42, bytes.fromhex('000000000000'), allow_disabled=True)
+        else:
+            radio.command(0x0c, b'\0\0', allow_disabled=True)
+        return
     gateway = Gateway(config, args.state, config_path=args.config)
     if config.get('mqtt', {}).get('enabled'):
         from mqtt_bridge import MQTTBridge

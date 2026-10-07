@@ -5,20 +5,20 @@
 ![Beacon Cooked](docs/beacon-cooked.svg)
 
 **Your Bluetooth lights, cooked locally.** An unofficial open-source gateway and
-HACS integration for Tuya Beacon lights. Put Bluetooth on a Linux host, and control
-the lights from Home Assistant on another machine.
+HACS integration for Tuya Beacon lights. Control lights using a local USB Bluetooth
+adapter or Bluetooth on another Linux machine.
 
 [Install through HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=MadeinTaly&repository=beacon-cooked&category=integration)
 · [First verified WRGB spotlight](docs/devices/wrgb-spotlight.md)
 · [Report another device](https://github.com/MadeinTaly/beacon-cooked/issues/new)
 
-Unofficial local control of Tuya Beacon lights through a network Bluetooth gateway.
+Unofficial local control of Tuya Beacon lights through local USB or a network Bluetooth gateway.
 Home Assistant and the Bluetooth USB adapter can run on different machines. No Tuya
 cloud account or cloud API is used for commands.
 
 ## Status and supported hardware
 
-Experimental version 0.2.0. Red and blue were physically confirmed on one AliExpress
+Experimental version 0.3.0. Red and blue were physically confirmed on one AliExpress
 WRGB spotlight using a virtual remote reconstructed from Tuya's public AK80x SDK.
 The actual spotlight chipset and commercial model are not identified. This is **not**
 support for every product advertised as Tuya Bluetooth or Tuya BLE Mesh.
@@ -38,15 +38,24 @@ Gateway reachability does not prove the lamp is powered or within radio range.
 
 Home Assistant custom integration → authenticated HTTP API → Linux gateway → BLE advertisements.
 
-The gateway can run on Proxmox, a Raspberry Pi or another Linux machine with a
-dedicated Bluetooth adapter. HACS installs the integration, **not** the host gateway.
+Use **Local USB Bluetooth** to control an adapter directly from Home Assistant on
+Linux: no separate gateway service is needed. Use **Bluetooth on another machine**
+for Proxmox, a Raspberry Pi or another Linux host. HACS installs the integration;
+the optional remote service is installed on the machine with the adapter.
 A standard ESPHome Bluetooth proxy is not an implemented transport in this version.
 The adapter must support legacy BLE advertising and setting a static random address.
 
 ## Gateway installation
 
-On a Debian-based gateway host, install `bluez` and enable Bluetooth. Copy
-`gateway/server.py` and `gateway/codec.py` to `/opt/tuya-beacon/`, and the unit
+For local USB, skip this section. For a remote Debian-based Bluetooth host, clone
+this repository and run `sudo sh gateway/install.sh`. The installer generates a
+private token and an empty device list; add lights from the Home Assistant wizard.
+Read the token locally from `/etc/tuya-beacon/config.json`.
+
+For manual installation, install `bluez` and enable Bluetooth. Copy
+`gateway/server.py` and `gateway/mqtt_bridge.py` to `/opt/tuya-beacon/`, copy the
+whole `custom_components/tuya_beacon/beacon` directory to `/opt/tuya-beacon/beacon/`,
+and copy the unit
 `gateway/tuya-beacon.service` to `/etc/systemd/system/`.
 
 Create `/etc/tuya-beacon/config.json`, readable only by root:
@@ -70,7 +79,8 @@ Create `/etc/tuya-beacon/config.json`, readable only by root:
 ```
 
 Run `systemctl daemon-reload` and `systemctl enable --now tuya-beacon`.
-The service uses legacy HCI commands and briefly enables advertising for each frame.
+The service selects legacy or extended HCI advertising commands for the adapter
+and briefly enables advertising for each frame.
 Its unit restricts filesystem writes and capabilities, but runs as root for HCI access.
 Use a trusted LAN; HTTP tokens are not encrypted on the wire. HTTPS through a local
 reverse proxy is supported by the integration's URL field. Do not expose the API publicly.
@@ -86,9 +96,14 @@ This repository follows the HACS custom integration layout. Once the repository 
 available to HACS, add its URL under **HACS → Custom repositories → Integration**.
 Alternatively copy `custom_components/tuya_beacon` into your HA configuration directory.
 
-Restart Home Assistant, then add **Tuya Beacon** under **Settings → Devices & services**.
-Enter the gateway URL (for example `http://192.168.1.10:8787`) and its token.
-One light and one configuration button are created per configured virtual remote.
+Restart Home Assistant, then add **Beacon Cooked — Tuya Beacon** under
+**Settings → Devices & services**. Choose local USB or remote Bluetooth. Only remote
+mode asks for the Bluetooth host URL and token. Then use **Find and add a light**:
+scan → select → name → associate → test color → physically confirm → finish.
+For an already configured installation, open its **Configure** / options button to
+add more lights or test/rebind existing ones. One light and one configuration button
+are created per confirmed remote. Drafts that were not confirmed are not exposed as
+working lights.
 
 To bind a new remote, press **Bind virtual remote** and power-cycle the intended lamp
 during the 15-second transmission window. Do not factory-reset a working lamp solely
@@ -143,19 +158,28 @@ Set `discovery: true` to use MQTT auto-discovery **instead of** the native HACS 
 Using both creates two entities controlling the same remote group. MQTT commands and
 native HA commands share the radio lock and sequence counters.
 
-## Discovery and onboarding status
+## Discovery and onboarding
 
-The gateway exposes scan and enrollment APIs. The current HACS UI connects a gateway
-and exposes its configured lights. A full graphical scan → select → bind → physically
-verify wizard is a next step; it is not shipped in this release.
+The Home Assistant wizard scans, selects, names, binds and tests a light, and asks
+for physical confirmation before exposing it as configured. It can also test or
+rebind existing lights. It supports local USB and remote Bluetooth through the same
+protocol library. All association identities and sequence counters are persisted.
 
-Initial factory pairing without the Tuya app has not been demonstrated. The examined
-SDK accepts remote binding only in a particular device state; do not assume the remote
-binding button replaces every manufacturer's initial provisioning procedure.
+In local mode, configuration and counters are stored under
+`/config/.storage/beacon_cooked/`. Home Assistant must have Linux Bluetooth HCI
+access; an adapter physically attached to a host is not automatically accessible
+inside an LXC. Shared HA Bluetooth discoveries are used when available; otherwise
+local mode scans through its HCI adapter. A raw local USB probe was exercised on an
+Intel AX211; the remote service was exercised with a CSR Bluetooth 4.0 dongle.
+
+Initial factory provisioning without the Tuya app has not been demonstrated. The
+wizard can bind a virtual remote, but cannot promise to replace a manufacturer's
+initial activation procedure on every firmware. A negative color test remains a
+failed/unverified association, with a retry path.
 
 ## Roadmap
 
-- Guided discovery and binding from Home Assistant, with a physical color check.
+- Validate initial factory provisioning without the Tuya app on more firmware.
 - Identify and document more spotlight models; verify independent multi-lamp control.
 - Verify brightness and white controls before exposing them in HA.
 - Additional gateway platforms, including an ESP32 transmitter.

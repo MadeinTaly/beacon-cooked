@@ -3,27 +3,229 @@
   "config": {
     "step": {
       "user": {
-        "title": "Collega il gateway Bluetooth",
-        "description": "Inserisci indirizzo e token del gateway Tuya Beacon. Il Bluetooth può trovarsi su un altro computer.",
+        "title": "Aggiungi i tuoi faretti Beacon",
+        "description": "Scegli dove è collegato l’adattatore Bluetooth.",
         "data": {
-          "gateway_url": "URL del gateway",
-          "token": "Token del gateway"
+          "connection_type": "Collegamento Bluetooth"
+        }
+      },
+      "local": {
+        "title": "Bluetooth USB locale",
+        "description": "Scegli un adattatore accessibile a Home Assistant. Con Docker o LXC, il sistema host deve esporre l’adattatore e consentire l’accesso Bluetooth HCI.",
+        "data": {
+          "adapter": "Adattatore Bluetooth"
+        }
+      },
+      "remote": {
+        "title": "Bluetooth su un altro computer",
+        "description": "Collega il servizio Beacon Cooked sul computer con la chiavetta Bluetooth. Poi aggiungi qui i faretti.",
+        "data": {
+          "gateway_url": "Indirizzo dell’host Bluetooth",
+          "token": "Token di accesso"
+        }
+      },
+      "menu": {
+        "title": "I tuoi faretti Beacon",
+        "menu_options": {
+          "scan": "Cerca e aggiungi un faretto",
+          "known_devices": "Prova o riassocia un faretto esistente",
+          "finish": "Completa"
+        }
+      },
+      "scan": {
+        "title": "Trova il faretto",
+        "description": "Metti il faretto desiderato in pairing, poi premi Invia. La scansione dura otto secondi. Se è già configurato, torna al menu e scegli i faretti esistenti."
+      },
+      "select_device": {
+        "title": "Scegli il faretto rilevato",
+        "description": "Sono elencati solo i dispositivi con il formato Tuya Beacon osservato. La compatibilità verrà verificata con una prova colore.",
+        "data": {
+          "device": "Faretto rilevato (MAC e segnale)",
+          "name": "Nome del faretto"
+        }
+      },
+      "known_devices": {
+        "title": "Faretti già configurati",
+        "data": {
+          "device": "Faretto",
+          "action": "Operazione"
+        }
+      },
+      "bind": {
+        "title": "Associa {name}",
+        "description": "Lascia gli altri faretti fuori dalla loro finestra di associazione. Spegni questo faretto. Premi Invia, poi accendilo subito: il comando di associazione viene trasmesso per 15 secondi. Basta un normale spegnimento e riaccensione, senza reset di fabbrica. Poi proverai un colore.",
+        "data": {
+          "only_target": "Durante l’associazione riaccenderò soltanto il faretto desiderato"
+        }
+      },
+      "test": {
+        "title": "Prova {name}",
+        "description": "Scegli un colore e premi Invia. Controlla il faretto reale, non soltanto lo stato mostrato da HA.",
+        "data": {
+          "effect": "Colore di prova"
+        }
+      },
+      "verify": {
+        "title": "{name} ha cambiato colore?",
+        "description": "Il colore inviato era {color}. Conferma solo se il faretto reale è cambiato. Altrimenti riprova l’associazione. Alcuni firmware richiedono l’attivazione iniziale nell’app Tuya prima di associare un telecomando virtuale.",
+        "data": {
+          "result": "Cosa è successo?"
+        }
+      },
+      "added": {
+        "title": "{name} è pronto",
+        "description": "Hai confermato il controllo del faretto. Completa per creare o aggiornare la luce in Home Assistant, oppure aggiungi un altro faretto.",
+        "data": {
+          "next": "Prossimo passo"
         }
       }
     },
     "error": {
-      "cannot_connect": "Impossibile raggiungere il gateway",
-      "invalid_auth": "Token del gateway non valido",
-      "invalid_gateway": "URL del gateway o risposta non validi"
+      "cannot_connect": "Impossibile raggiungere il Bluetooth",
+      "invalid_auth": "Token di accesso non valido",
+      "invalid_gateway": "Indirizzo o risposta dell’host Bluetooth non validi",
+      "no_devices": "Nessun annuncio compatibile ricevuto. Verifica che il faretto sia in pairing, poi riprova.",
+      "cannot_scan": "Scansione Bluetooth non riuscita",
+      "cannot_enroll": "Impossibile salvare il faretto selezionato. Ripeti la scansione.",
+      "cannot_bind": "Trasmissione dell’associazione non riuscita",
+      "isolate_target": "Conferma che soltanto il faretto desiderato entrerà nella finestra di associazione",
+      "local_unavailable": "Home Assistant non può accedere a questo adattatore USB Bluetooth",
+      "no_local_adapter": "Nessun adattatore Bluetooth locale è esposto a Home Assistant"
     },
     "abort": {
-      "already_configured": "Gateway già configurato"
+      "already_configured": "Già configurato. Apri le opzioni dell’integrazione per aggiungere faretti.",
+      "cannot_connect": "Impossibile raggiungere il Bluetooth"
+    }
+  },
+  "options": {
+    "step": {
+      "user": {
+        "title": "Aggiungi i tuoi faretti Beacon",
+        "description": "Scegli dove è collegato l’adattatore Bluetooth.",
+        "data": {
+          "connection_type": "Collegamento Bluetooth"
+        }
+      },
+      "local": {
+        "title": "Bluetooth USB locale",
+        "description": "Scegli un adattatore accessibile a Home Assistant. Con Docker o LXC, il sistema host deve esporre l’adattatore e consentire l’accesso Bluetooth HCI.",
+        "data": {
+          "adapter": "Adattatore Bluetooth"
+        }
+      },
+      "remote": {
+        "title": "Bluetooth su un altro computer",
+        "description": "Collega il servizio Beacon Cooked sul computer con la chiavetta Bluetooth. Poi aggiungi qui i faretti.",
+        "data": {
+          "gateway_url": "Indirizzo dell’host Bluetooth",
+          "token": "Token di accesso"
+        }
+      },
+      "menu": {
+        "title": "I tuoi faretti Beacon",
+        "menu_options": {
+          "scan": "Cerca e aggiungi un faretto",
+          "known_devices": "Prova o riassocia un faretto esistente",
+          "finish": "Completa"
+        }
+      },
+      "scan": {
+        "title": "Trova il faretto",
+        "description": "Metti il faretto desiderato in pairing, poi premi Invia. La scansione dura otto secondi. Se è già configurato, torna al menu e scegli i faretti esistenti."
+      },
+      "select_device": {
+        "title": "Scegli il faretto rilevato",
+        "description": "Sono elencati solo i dispositivi con il formato Tuya Beacon osservato. La compatibilità verrà verificata con una prova colore.",
+        "data": {
+          "device": "Faretto rilevato (MAC e segnale)",
+          "name": "Nome del faretto"
+        }
+      },
+      "known_devices": {
+        "title": "Faretti già configurati",
+        "data": {
+          "device": "Faretto",
+          "action": "Operazione"
+        }
+      },
+      "bind": {
+        "title": "Associa {name}",
+        "description": "Lascia gli altri faretti fuori dalla loro finestra di associazione. Spegni questo faretto. Premi Invia, poi accendilo subito: il comando di associazione viene trasmesso per 15 secondi. Basta un normale spegnimento e riaccensione, senza reset di fabbrica. Poi proverai un colore.",
+        "data": {
+          "only_target": "Durante l’associazione riaccenderò soltanto il faretto desiderato"
+        }
+      },
+      "test": {
+        "title": "Prova {name}",
+        "description": "Scegli un colore e premi Invia. Controlla il faretto reale, non soltanto lo stato mostrato da HA.",
+        "data": {
+          "effect": "Colore di prova"
+        }
+      },
+      "verify": {
+        "title": "{name} ha cambiato colore?",
+        "description": "Il colore inviato era {color}. Conferma solo se il faretto reale è cambiato. Altrimenti riprova l’associazione. Alcuni firmware richiedono l’attivazione iniziale nell’app Tuya prima di associare un telecomando virtuale.",
+        "data": {
+          "result": "Cosa è successo?"
+        }
+      },
+      "added": {
+        "title": "{name} è pronto",
+        "description": "Hai confermato il controllo del faretto. Completa per creare o aggiornare la luce in Home Assistant, oppure aggiungi un altro faretto.",
+        "data": {
+          "next": "Prossimo passo"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossibile raggiungere il Bluetooth",
+      "invalid_auth": "Token di accesso non valido",
+      "invalid_gateway": "Indirizzo o risposta dell’host Bluetooth non validi",
+      "no_devices": "Nessun annuncio compatibile ricevuto. Verifica che il faretto sia in pairing, poi riprova.",
+      "cannot_scan": "Scansione Bluetooth non riuscita",
+      "cannot_enroll": "Impossibile salvare il faretto selezionato. Ripeti la scansione.",
+      "cannot_bind": "Trasmissione dell’associazione non riuscita",
+      "isolate_target": "Conferma che soltanto il faretto desiderato entrerà nella finestra di associazione",
+      "local_unavailable": "Home Assistant non può accedere a questo adattatore USB Bluetooth",
+      "no_local_adapter": "Nessun adattatore Bluetooth locale è esposto a Home Assistant"
+    },
+    "abort": {
+      "already_configured": "Già configurato. Apri le opzioni dell’integrazione per aggiungere faretti.",
+      "cannot_connect": "Impossibile raggiungere il Bluetooth"
     }
   },
   "entity": {
     "button": {
       "pair_remote": {
         "name": "Associa telecomando virtuale"
+      }
+    }
+  },
+  "selector": {
+    "connection_type": {
+      "options": {
+        "local": "Bluetooth USB su questa macchina",
+        "remote": "Bluetooth su un altro computer"
+      }
+    },
+    "action": {
+      "options": {
+        "test": "Prova il faretto",
+        "bind": "Associa di nuovo"
+      }
+    },
+    "result": {
+      "options": {
+        "confirmed": "Sì, il faretto ha cambiato colore",
+        "retry": "Nessun cambiamento: riprova l’associazione",
+        "another_color": "Prova un altro colore",
+        "cancel": "Torna al menu"
+      }
+    },
+    "next": {
+      "options": {
+        "finish": "Completa",
+        "another": "Aggiungi un altro faretto"
       }
     }
   }

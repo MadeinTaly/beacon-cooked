@@ -10,7 +10,8 @@ from .const import DOMAIN
 
 async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = entry.runtime_data
-    async_add_entities(BeaconPairButton(coordinator, lamp) for lamp in coordinator.data['lights'])
+    async_add_entities(BeaconPairButton(coordinator, lamp) for lamp in coordinator.data['lights']
+                       if lamp.get('association') != 'unverified')
 
 
 class BeaconPairButton(CoordinatorEntity, ButtonEntity):

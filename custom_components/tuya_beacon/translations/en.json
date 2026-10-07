@@ -3,27 +3,229 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect Bluetooth gateway",
-        "description": "Enter the address and token of your Tuya Beacon gateway. Bluetooth can be on another machine.",
+        "title": "Add your Beacon lights",
+        "description": "Choose where the Bluetooth adapter is connected.",
         "data": {
-          "gateway_url": "Gateway URL",
-          "token": "Gateway token"
+          "connection_type": "Bluetooth connection"
+        }
+      },
+      "local": {
+        "title": "Local USB Bluetooth",
+        "description": "Select a Bluetooth adapter accessible to Home Assistant. For Docker or LXC, the host must expose the adapter and permit Bluetooth HCI access.",
+        "data": {
+          "adapter": "Bluetooth adapter"
+        }
+      },
+      "remote": {
+        "title": "Bluetooth on another machine",
+        "description": "Connect to the Beacon Cooked service on the machine that has your Bluetooth adapter. Then add the lights here.",
+        "data": {
+          "gateway_url": "Bluetooth host URL",
+          "token": "Access token"
+        }
+      },
+      "menu": {
+        "title": "Your Beacon lights",
+        "menu_options": {
+          "scan": "Find and add a light",
+          "known_devices": "Test or rebind an existing light",
+          "finish": "Finish"
+        }
+      },
+      "scan": {
+        "title": "Find your light",
+        "description": "Put the intended light in pairing mode, then submit. Scanning takes eight seconds. If it is already configured, return to the menu and select existing lights."
+      },
+      "select_device": {
+        "title": "Choose a discovered light",
+        "description": "Only devices matching the observed Tuya Beacon packet format are listed. Compatibility is checked with a color test.",
+        "data": {
+          "device": "Discovered light (MAC and signal)",
+          "name": "Light name"
+        }
+      },
+      "known_devices": {
+        "title": "Existing lights",
+        "data": {
+          "device": "Light",
+          "action": "Action"
+        }
+      },
+      "bind": {
+        "title": "Associate {name}",
+        "description": "Keep other lights out of their binding windows. Switch this light off. Submit, then immediately switch it on: the remote association is transmitted for 15 seconds. This is a normal power cycle, not a factory reset. You will test the color next.",
+        "data": {
+          "only_target": "Only the intended light will be powered on during association"
+        }
+      },
+      "test": {
+        "title": "Test {name}",
+        "description": "Choose a color and submit. Check the actual light, not just its HA state.",
+        "data": {
+          "effect": "Test color"
+        }
+      },
+      "verify": {
+        "title": "Did {name} change color?",
+        "description": "The test color was {color}. Confirm only if the actual light changed. If it did not, retry association. Some firmware requires initial activation with the Tuya app before a virtual remote can be bound.",
+        "data": {
+          "result": "What happened?"
+        }
+      },
+      "added": {
+        "title": "{name} is ready",
+        "description": "Its control was physically confirmed. Finish to create or refresh the light in Home Assistant, or add another light.",
+        "data": {
+          "next": "Next step"
         }
       }
     },
     "error": {
-      "cannot_connect": "Cannot connect to the gateway",
-      "invalid_auth": "Invalid gateway token",
-      "invalid_gateway": "Invalid gateway URL or unsupported response"
+      "cannot_connect": "Cannot reach Bluetooth",
+      "invalid_auth": "Invalid access token",
+      "invalid_gateway": "Invalid Bluetooth host address or response",
+      "no_devices": "No compatible announcements received. Make sure the light is in pairing mode, then scan again.",
+      "cannot_scan": "Bluetooth scan failed",
+      "cannot_enroll": "Could not save the selected light. Scan again.",
+      "cannot_bind": "Association transmission failed",
+      "isolate_target": "Confirm that only the intended light will enter its binding window",
+      "local_unavailable": "Home Assistant cannot access this USB Bluetooth adapter",
+      "no_local_adapter": "No local Bluetooth adapter is exposed to Home Assistant"
     },
     "abort": {
-      "already_configured": "Gateway already configured"
+      "already_configured": "Already configured. Open the integration options to add lights.",
+      "cannot_connect": "Cannot reach Bluetooth"
+    }
+  },
+  "options": {
+    "step": {
+      "user": {
+        "title": "Add your Beacon lights",
+        "description": "Choose where the Bluetooth adapter is connected.",
+        "data": {
+          "connection_type": "Bluetooth connection"
+        }
+      },
+      "local": {
+        "title": "Local USB Bluetooth",
+        "description": "Select a Bluetooth adapter accessible to Home Assistant. For Docker or LXC, the host must expose the adapter and permit Bluetooth HCI access.",
+        "data": {
+          "adapter": "Bluetooth adapter"
+        }
+      },
+      "remote": {
+        "title": "Bluetooth on another machine",
+        "description": "Connect to the Beacon Cooked service on the machine that has your Bluetooth adapter. Then add the lights here.",
+        "data": {
+          "gateway_url": "Bluetooth host URL",
+          "token": "Access token"
+        }
+      },
+      "menu": {
+        "title": "Your Beacon lights",
+        "menu_options": {
+          "scan": "Find and add a light",
+          "known_devices": "Test or rebind an existing light",
+          "finish": "Finish"
+        }
+      },
+      "scan": {
+        "title": "Find your light",
+        "description": "Put the intended light in pairing mode, then submit. Scanning takes eight seconds. If it is already configured, return to the menu and select existing lights."
+      },
+      "select_device": {
+        "title": "Choose a discovered light",
+        "description": "Only devices matching the observed Tuya Beacon packet format are listed. Compatibility is checked with a color test.",
+        "data": {
+          "device": "Discovered light (MAC and signal)",
+          "name": "Light name"
+        }
+      },
+      "known_devices": {
+        "title": "Existing lights",
+        "data": {
+          "device": "Light",
+          "action": "Action"
+        }
+      },
+      "bind": {
+        "title": "Associate {name}",
+        "description": "Keep other lights out of their binding windows. Switch this light off. Submit, then immediately switch it on: the remote association is transmitted for 15 seconds. This is a normal power cycle, not a factory reset. You will test the color next.",
+        "data": {
+          "only_target": "Only the intended light will be powered on during association"
+        }
+      },
+      "test": {
+        "title": "Test {name}",
+        "description": "Choose a color and submit. Check the actual light, not just its HA state.",
+        "data": {
+          "effect": "Test color"
+        }
+      },
+      "verify": {
+        "title": "Did {name} change color?",
+        "description": "The test color was {color}. Confirm only if the actual light changed. If it did not, retry association. Some firmware requires initial activation with the Tuya app before a virtual remote can be bound.",
+        "data": {
+          "result": "What happened?"
+        }
+      },
+      "added": {
+        "title": "{name} is ready",
+        "description": "Its control was physically confirmed. Finish to create or refresh the light in Home Assistant, or add another light.",
+        "data": {
+          "next": "Next step"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot reach Bluetooth",
+      "invalid_auth": "Invalid access token",
+      "invalid_gateway": "Invalid Bluetooth host address or response",
+      "no_devices": "No compatible announcements received. Make sure the light is in pairing mode, then scan again.",
+      "cannot_scan": "Bluetooth scan failed",
+      "cannot_enroll": "Could not save the selected light. Scan again.",
+      "cannot_bind": "Association transmission failed",
+      "isolate_target": "Confirm that only the intended light will enter its binding window",
+      "local_unavailable": "Home Assistant cannot access this USB Bluetooth adapter",
+      "no_local_adapter": "No local Bluetooth adapter is exposed to Home Assistant"
+    },
+    "abort": {
+      "already_configured": "Already configured. Open the integration options to add lights.",
+      "cannot_connect": "Cannot reach Bluetooth"
     }
   },
   "entity": {
     "button": {
       "pair_remote": {
         "name": "Bind virtual remote"
+      }
+    }
+  },
+  "selector": {
+    "connection_type": {
+      "options": {
+        "local": "USB Bluetooth on this machine",
+        "remote": "Bluetooth on another machine"
+      }
+    },
+    "action": {
+      "options": {
+        "test": "Test the light",
+        "bind": "Associate again"
+      }
+    },
+    "result": {
+      "options": {
+        "confirmed": "Yes, the light changed color",
+        "retry": "No change: retry association",
+        "another_color": "Try another color",
+        "cancel": "Return to the menu"
+      }
+    },
+    "next": {
+      "options": {
+        "finish": "Finish",
+        "another": "Add another light"
       }
     }
   }

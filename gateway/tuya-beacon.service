@@ -5,6 +5,7 @@ Wants=bluetooth.service network-online.target
 
 [Service]
 ExecStart=/usr/bin/python3 /opt/tuya-beacon/server.py
+ExecStopPost=-/usr/bin/python3 /opt/tuya-beacon/server.py --stop-radio
 Restart=on-failure
 RestartSec=3
 StateDirectory=tuya-beacon
